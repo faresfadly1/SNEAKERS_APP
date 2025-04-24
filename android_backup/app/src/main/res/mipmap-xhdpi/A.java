@@ -1,0 +1,1 @@
+ic_launcher (2).png

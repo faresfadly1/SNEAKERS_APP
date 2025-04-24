@@ -1,0 +1,128 @@
+// DEPRECATED: This file is no longer used.
+// The project has been migrated to use the Flutter plugin loader approach
+// which directly integrates Flutter with the Gradle build system using
+// the plugins DSL in settings.gradle.kts and build.gradle.kts files.
+// This file is kept for historical reference only and can be safely removed.
+
+// This file configures the Flutter SDK integration with the Android build system
+// using the modern declarative plugins DSL
+
+// Set up project repositories for Flutter
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url "https://storage.googleapis.com/download.flutter.io" }
+    }
+}
+
+// A helper to locate the Flutter SDK
+def flutterProjectRoot = rootProject.projectDir.parentFile
+def flutterSdkPath = getFlutterSdkPath(flutterProjectRoot)
+
+// Function to find the Flutter SDK path
+String getFlutterSdkPath(File projectRoot) {
+    def localPropertiesFile = new File(projectRoot, "local.properties")
+    if (localPropertiesFile.exists()) {
+        Properties properties = new Properties()
+        localPropertiesFile.withInputStream { properties.load(it) }
+        def flutterSdkPath = properties.getProperty("flutter.sdk")
+        if (flutterSdkPath != null) {
+            return flutterSdkPath
+        }
+    }
+
+    // Default fallback logic
+    def environment = System.getenv()
+    return environment.get("FLUTTER_ROOT")
+}
+
+// Configure Flutter plugins
+if (flutterSdkPath != null) {
+    // Process the plugin list
+    def flutterPluginFile = new File(flutterProjectRoot, '.flutter-plugins')
+    if (flutterPluginFile.exists()) {
+        Properties plugins = new Properties()
+        flutterPluginFile.withInputStream { plugins.load(it) }
+        plugins.each { name, path ->
+            def pluginDirectory = new File(path)
+            def pluginGradleFile = new File(pluginDirectory, "android/${name}_android.gradle")
+            if (pluginGradleFile.exists()) {
+                apply from: pluginGradleFile
+            }
+        }
+    }
+
+    // Process the plugin dependencies
+    def flutterPluginDependenciesFile = new File(flutterProjectRoot, '.flutter-plugins-dependencies')
+    if (flutterPluginDependenciesFile.exists()) {
+        def dependencies = new groovy.json.JsonSlurper().parseText(flutterPluginDependenciesFile.text)
+        dependencies.plugins.each { plugin ->
+            def name = plugin.name
+            def path = plugin.path
+            def pluginDirectory = new File(path)
+            def pluginGradleFile = new File(pluginDirectory, "android/${name}_android.gradle")
+            if (pluginGradleFile.exists()) {
+                apply from: pluginGradleFile
+            }
+        }
+    }
+}
+
+// This file configures the Flutter Gradle plugin using the declarative plugins DSL
+// instead of the older 'apply from' approach.
+
+// The plugins block is the modern, declarative way to apply plugins in Gradle
+plugins {
+    // Apply the Flutter Gradle plugin
+    id 'dev.flutter.flutter-gradle-plugin'
+}
+
+// Configuration for the Flutter plugin if needed
+flutter {
+    // You can add Flutter-specific configuration here if required
+}
+
+// This file is used to integrate Flutter with Gradle in the Android build system
+// It's included from settings.gradle.kts
+
+// Function to resolve paths relative to the Flutter SDK
+def flutterProjectRoot = rootProject.projectDir.parentFile
+
+def localPropertiesFile = new File(flutterProjectRoot, "local.properties")
+def properties = new Properties()
+
+assert localPropertiesFile.exists()
+localPropertiesFile.withReader("UTF-8") { reader -> properties.load(reader) }
+
+def flutterSdkPath = properties.getProperty("flutter.sdk")
+assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+
+apply from: "$flutterSdkPath/packages/flutter_tools/gradle/app_plugin_loader.gradle"
+
+// Include Flutter plugins
+def flutterPluginInfoFile = new File(flutterProjectRoot, '.flutter-plugins')
+if (flutterPluginInfoFile.exists()) {
+    new Properties().with { pluginProperties ->
+        pluginProperties.load(new FileInputStream(flutterPluginInfoFile))
+        pluginProperties.each { name, path ->
+            def pluginDirectory = flutterProjectRoot.toPath().resolve(path).resolve('android').toFile()
+            include ":$name"
+            project(":$name").projectDir = pluginDirectory
+        }
+    }
+}
+
+// Include Flutter modules
+def flutterModuleInfoFile = new File(flutterProjectRoot, '.flutter-plugins-dependencies')
+if (flutterModuleInfoFile.exists()) {
+    def deps = new groovy.json.JsonSlurper().parseText(flutterModuleInfoFile.text)
+    if (deps.plugins && deps.plugins.android) {
+        deps.plugins.android.each { name, path ->
+            def pluginDirectory = flutterProjectRoot.toPath().resolve(path).resolve('android').toFile()
+            include ":$name"
+            project(":$name").projectDir = pluginDirectory
+        }
+    }
+}
+
